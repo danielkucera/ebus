@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -62,6 +63,9 @@ struct BusEvent {
 
 class BusPosix {
  public:
+  using ReadListener = std::function<void(const uint8_t& byte)>;
+  using WriteListener = std::function<void(const uint8_t& byte)>;
+
   explicit BusPosix(const busConfig& config, Request* request);
   ~BusPosix();
 
@@ -79,10 +83,8 @@ class BusPosix {
   void setWindow(const uint16_t window);
   void setOffset(const uint16_t offset);
 
-  // get the last written byte or the full history of written bytes
-  uint8_t getLastWrittenByte() const;
-  std::string getSimulatedWrittenBytes() const;
-  size_t getWrittenByteCount() const;
+  void addReadListener(ReadListener listener);
+  void addWriteListener(WriteListener listener);
 
  private:
   std::string device_;
@@ -108,9 +110,8 @@ class BusPosix {
   std::thread thread_;
   std::atomic<bool> running_;
 
-  // simulated written bytes
-  uint8_t lastWrittenByte_ = 0x00;
-  std::vector<uint8_t> writtenBytes_;
+  std::vector<ReadListener> readListeners_;
+  std::vector<WriteListener> writeListeners_;
 
   // SYN generator members
   std::thread synThread_;

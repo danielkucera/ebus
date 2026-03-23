@@ -77,7 +77,8 @@ void ebus::BusPosix::start() {
 
   // start SYN generator if enabled in config
   if (enableSyn_) {
-    currentTunique_ = synBase_ + std::chrono::milliseconds(masterAddr_ * 10) + synTolerance_;
+    currentTunique_ =
+        synBase_ + std::chrono::milliseconds(masterAddr_ * 10) + synTolerance_;
     nextSynExpiry_ = std::chrono::steady_clock::now() + currentTunique_;
 
     synActive_ = false;
@@ -129,10 +130,9 @@ ebus::Queue<ebus::BusEvent>* ebus::BusPosix::getQueue() const {
 }
 
 void ebus::BusPosix::writeByte(const uint8_t byte) {
-  if (simulate_) {
-    lastWrittenByte_ = byte;
-    writtenBytes_.push_back(byte);
+  for (const auto& listener : writeListeners_) listener(byte);
 
+  if (simulate_) {
     if (pipeFds_[1] != -1) {
       ::write(pipeFds_[1], &byte, 1);
     }
@@ -148,13 +148,13 @@ void ebus::BusPosix::setWindow(const uint16_t window) { window_ = window; }
 
 void ebus::BusPosix::setOffset(const uint16_t offset) { offset_ = offset; }
 
-uint8_t ebus::BusPosix::getLastWrittenByte() const { return lastWrittenByte_; }
-
-std::string ebus::BusPosix::getSimulatedWrittenBytes() const {
-  return ebus::to_string(writtenBytes_);
+void ebus::BusPosix::addReadListener(ReadListener listener) {
+  readListeners_.push_back(listener);
 }
 
-size_t ebus::BusPosix::getWrittenByteCount() const { return writtenBytes_.size(); }
+void ebus::BusPosix::addWriteListener(WriteListener listener) {
+  writeListeners_.push_back(listener);
+}
 
 void ebus::BusPosix::ensureOpen() const {
   if (!open_ || fd_ < 0) throw std::runtime_error("BusPosix: device not open");
@@ -166,6 +166,8 @@ void ebus::BusPosix::readerThread() {
     uint8_t byte;
     ssize_t n = ::read(fd_, &byte, 1);
     if (n == 1) {
+      for (const auto& listener : readListeners_) listener(byte);
+
       // Notify SYN generator that a symbol was recognised (end of char)
       resetSynTimer(byte);
 

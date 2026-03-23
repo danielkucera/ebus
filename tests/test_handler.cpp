@@ -248,9 +248,6 @@ bool run_test(const TestCase& tc) {
   if (tc.send_string.size() > 0)
     handler.sendActiveMessage(ebus::to_vector(tc.send_string));
 
-  // Remember last written bytes to detect new ones
-  size_t written_count = bus.getWrittenByteCount();
-
   bool busRequestFlag = false;
   for (size_t i = 0; i < seq.size(); i++) {
     switch (handler.getState()) {
@@ -270,26 +267,11 @@ bool run_test(const TestCase& tc) {
     request.run(seq[i]);
     handler.run(seq[i]);
 
-    // Check if anything was written and log it
-    if (bus.getWrittenByteCount() > written_count) {
-      if (g_detailed_output)
-        std::cout << "<- write: " << ebus::to_string(bus.getLastWrittenByte())
-                  << std::endl;
-      written_count = bus.getWrittenByteCount();
-    }
-
     // simulte request bus timer
     if (seq[i] == ebus::sym_syn && request.busRequestPending()) {
       if (g_detailed_output) std::cout << " ISR - write address" << std::endl;
       bus.writeByte(request.busRequestAddress());
       busRequestFlag = true;
-
-      if (bus.getWrittenByteCount() > written_count) {
-        if (g_detailed_output)
-          std::cout << "<- write: " << ebus::to_string(bus.getLastWrittenByte())
-                    << std::endl;
-        written_count = bus.getWrittenByteCount();
-      }
     }
   }
 
@@ -362,6 +344,12 @@ int main() {
   handler.setReactiveMasterSlaveCallback(reactiveMasterSlaveCallback);
   handler.setTelegramCallback(telegramCallback);
   handler.setErrorCallback(errorCallback);
+
+  // Register write listener for synchronous logging
+  bus.addWriteListener([](const uint8_t& byte) {
+    if (g_detailed_output)
+      std::cout << "<- write: " << ebus::to_string(byte) << std::endl;
+  });
 
   for (const TestCase& tc : test_cases) {
     g_detailed_output = false;
