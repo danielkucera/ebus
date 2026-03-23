@@ -21,6 +21,7 @@
 
 #if defined(POSIX)
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <thread>
 #include <vector>
@@ -39,8 +40,11 @@ class BusHandlerPosix {
   BusHandlerPosix(Request* request, Handler* handler, Queue<BusEvent>* queue)
       : request_(request), handler_(handler), queue_(queue), running_(false) {}
 
+  ~BusHandlerPosix() { stop(); }
+
   void start() {
     running_ = true;
+    if (thread_.joinable()) thread_.join();
     thread_ = std::thread([this]() { this->run(); });
   }
 
@@ -48,8 +52,6 @@ class BusHandlerPosix {
     running_ = false;
     if (thread_.joinable()) thread_.join();
   }
-
-  void enableTesting() { testing_ = true; }
 
   // Register a listener for incoming bytes
   void addByteListener(ByteListener listener) {
@@ -62,26 +64,17 @@ class BusHandlerPosix {
   Queue<BusEvent>* queue_;
   std::atomic<bool> running_;
   std::thread thread_;
-  bool testing_ = false;
   std::vector<ByteListener> listeners_;
 
   void run() {
     BusEvent event;
     while (running_) {
-      if (queue_->pop(event)) {
-        if (testing_) {
-          for (const ByteListener& listener : listeners_) listener(event.byte);
-          if (event.busRequest) request_->busRequestCompleted();
-          if (event.startBit) request_->startBit();
-          request_->run(event.byte);
-          handler_->run(event.byte);
-        } else {
-          if (event.busRequest) request_->busRequestCompleted();
-          if (event.startBit) request_->startBit();
-          request_->run(event.byte);
-          handler_->run(event.byte);
-          for (const ByteListener& listener : listeners_) listener(event.byte);
-        }
+      if (queue_->pop(event, std::chrono::milliseconds(100))) {
+        if (event.busRequest) request_->busRequestCompleted();
+        if (event.startBit) request_->startBit();
+        request_->run(event.byte);
+        handler_->run(event.byte);
+        for (const ByteListener& listener : listeners_) listener(event.byte);
       }
     }
   }
