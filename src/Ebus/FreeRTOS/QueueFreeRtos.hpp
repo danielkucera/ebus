@@ -89,6 +89,11 @@ class QueueFreeRtos {
     return xQueueReceiveFromISR(queue_, &out, &xTaskWoken) == pdTRUE;
   }
 
+  // Clears all items from the queue
+  void clear() {
+    xQueueReset(queue_);
+  }
+
   size_t size() const { return uxQueueMessagesWaiting(queue_); }
 
  private:
