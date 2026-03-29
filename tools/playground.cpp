@@ -1,31 +1,17 @@
 /*
  * Copyright (C) 2023-2026 Roland Jax
- *
- * This file is part of ebus.
- *
- * ebus is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * ebus is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with ebus. If not, see http://www.gnu.org/licenses/.
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 #include <algorithm>
 #include <cstddef>
+#include <ebus/Datatypes.hpp>
 #include <iomanip>
 #include <iostream>
 #include <string>
 
-#include "Datatypes.hpp"
-#include "Sequence.hpp"
-#include "Telegram.hpp"
+#include "Core/Sequence.hpp"
+#include "Core/Telegram.hpp"
 
 void printSequence(const std::string& strSequence) {
   ebus::Sequence sequence;
@@ -230,9 +216,9 @@ int main() {
 
   printDecodeEncode(0xc7, 0xbc);
 
-  printEncodeDecode(0x2, 0x77);
+  printEncodeDecode(0xc7, 0xbe);
 
-  printDecodeEncode(0xc9, 0xb7);
+  printDecodeEncode(0xc7, 0xbe);
 
   printFloatTestLittleEndian();
 

@@ -84,7 +84,9 @@
         "queue": "cpp",
         "stack": "cpp",
         "csignal": "cpp",
-        "cassert": "cpp"
+        "cassert": "cpp",
+        "complex": "cpp",
+        "regex": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "C_Cpp.autoAddFileAssociations": true

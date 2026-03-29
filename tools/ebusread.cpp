@@ -1,20 +1,6 @@
 /*
  * Copyright (C) 2012-2026 Roland Jax
- *
- * This file is part of ebus.
- *
- * ebus is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * ebus is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with ebus. If not, see http://www.gnu.org/licenses/.
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 // The reader interprets all incoming values ​​as eBUS data. As a
@@ -37,12 +23,12 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <ebus/Datatypes.hpp>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
-#include "Datatypes.hpp"
-#include "Telegram.hpp"
+#include "Core/Telegram.hpp"
 
 constexpr const char* RESET = "\033[0m";
 constexpr const char* BOLD = "\033[1m";

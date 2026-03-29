@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.10.0)
-project(ebus VERSION 1.0.0 LANGUAGES C CXX)
+project(ebus VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 set(CMAKE_CXX_STANDARD 14)
+
+# Ensure all libraries and executables are built with PIC for modern linkers
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Default to Debug build if not specified
 if(NOT CMAKE_BUILD_TYPE)
@@ -15,9 +18,16 @@ if(UNIX AND NOT APPLE)
     set(POSIX ON)
 endif()
 
+# include(FetchContent)
+# FetchContent_Declare(
+#   Catch2
+#   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+#   GIT_TAG        v3.4.0
+# )
+# FetchContent_MakeAvailable(Catch2)
+
 add_subdirectory(src/Ebus)
 
 add_subdirectory(tests)
 
 add_subdirectory(tools)
-

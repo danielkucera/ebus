@@ -1,0 +1,211 @@
+/*
+ * Copyright (C) 2026 Roland Jax
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <cassert>
+#include <iostream>
+#include <vector>
+
+#include "App/Client.hpp"
+#include "Core/Request.hpp"
+#include "TestUtils.hpp"
+#include "ebus/Definitions.hpp"
+
+void run_test(const std::string& name, bool condition) {
+  std::cout << "[TEST] " << name << ": " << (condition ? "PASSED" : "FAILED")
+            << std::endl;
+  if (!condition) std::exit(1);
+}
+
+void test_enhanced_client_protocol() {
+  std::cout << "--- Test: Enhanced Client Protocol (ebusd binary) ---"
+            << std::endl;
+
+  int sv[2];
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) {
+    perror("socketpair");
+    exit(1);
+  }
+
+  ebus::Request req;
+  ebus::EnhancedClient client(sv[0], &req);
+
+  // The client sends a version string on connect
+  char buffer[64];
+  run_test("Sent greeting on connect",
+           read_exact(sv[1], (uint8_t*)buffer, GREETING_STR.length()));
+
+  // Test 1: Simple data byte (< 0x80)
+  uint8_t out;
+  uint8_t data = 0x15;
+  send(sv[1], &data, 1, 0);
+  run_test("Read simple byte", client.readByte(out) && out == 0x15);
+
+  // Test 2: Enhanced Escape Sequence (CMD_SEND 0x01)
+  // Logical: CMD_SEND (1), Val 0xaa
+  uint8_t escaped[2];
+  encode_enhanced(0x01, 0xaa, escaped);
+  send(sv[1], escaped, 2, 0);
+  run_test("Read escaped 0xaa", client.readByte(out) && out == 0xaa);
+
+  // Test 3: CMD_INIT decoding and response
+  uint8_t init_cmd[2];
+  encode_enhanced(0x00, 0x00, init_cmd);  // Logical: CMD_INIT (0), val 0
+  send(sv[1], init_cmd, 2, 0);
+  run_test("Read CMD_INIT (returns false)", !client.readByte(out));
+
+  // Verify library sends RESP_RESETTED (Logical 0x00, val 0x00 -> Encoded 0xc0,
+  // 0x80)
+  uint8_t init_resp[2];
+  run_test("Received RESP_RESETTED", read_exact(sv[1], init_resp, 2) &&
+                                         init_resp[0] == 0xc0 &&
+                                         init_resp[1] == 0x80);
+
+  close(sv[0]);
+  close(sv[1]);
+}
+
+void test_enhanced_client_responses() {
+  std::cout << "--- Test: Enhanced Client Responses (Encoding) ---"
+            << std::endl;
+
+  int sv[2];
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) {
+    perror("socketpair");
+    exit(1);
+  }
+
+  ebus::Request req;
+  req.setMaxLockCounter(0); // Disable arbitration lock for deterministic testing
+  ebus::EnhancedClient client(sv[0], &req);
+
+  // Consume greeting: Read EXACTLY the length to avoid race with handleBusData
+  char buffer[64];
+  read_exact(sv[1], (uint8_t*)buffer, GREETING_STR.length());
+
+  // Fix: Force the request result instead of driving the state machine
+  req.forceResultForTest(ebus::RequestResult::firstWon);
+  client.handleBusData(0x33);
+  req.clearForcedResult();
+
+  // Verify RESP_STARTED (Logical 0x02, val 0x33 -> Encoded 0xc8, 0xb3)
+  uint8_t resp[2];
+  run_test("Encoded RESP_STARTED",
+           read_exact(sv[1], resp, 2) && resp[0] == 0xc8 && resp[1] == 0xb3);
+
+  // Test: handleBusData mapping for observation (Short Form < 0x80)
+  req.forceResultForTest(ebus::RequestResult::observeData);
+  client.handleBusData(0x15);
+  req.clearForcedResult();
+
+  uint8_t short_resp;
+  run_test("Received short form RESP_RECEIVED",
+           read_exact(sv[1], &short_resp, 1) && short_resp == 0x15);
+
+  // Test: handleBusData mapping for observation (Long Form >= 0x80)
+  req.forceResultForTest(ebus::RequestResult::observeData);
+  client.handleBusData(0xaa);
+  req.clearForcedResult();
+
+  run_test("Received encoded long RESP_RECEIVED",
+           read_exact(sv[1], resp, 2) && resp[0] == 0xc6 && resp[1] == 0xaa);
+
+  close(sv[0]);
+  close(sv[1]);
+}
+
+void test_readonly_client() {
+  std::cout << "--- Test: ReadOnly Client ---" << std::endl;
+  int sv[2];
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) {
+    perror("socketpair");
+    exit(1);
+  }
+
+  ebus::Request req;
+  ebus::ReadOnlyClient client(sv[0], &req);
+
+  run_test("ReadOnly is not write capable", !client.isWriteCapable());
+  run_test("ReadOnly available() is always false", !client.available());
+
+  close(sv[0]);
+  close(sv[1]);
+}
+
+void test_enhanced_client_invalid_protocol() {
+  std::cout << "--- Test: Enhanced Client Invalid Protocol ---" << std::endl;
+
+  int sv[2];
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) {
+    perror("socketpair");
+    exit(1);
+  }
+
+  ebus::Request req;
+  ebus::EnhancedClient client(sv[0], &req);
+
+  // Consume the initial greeting
+  char buffer[64];
+  read_exact(sv[1], (uint8_t*)buffer, GREETING_STR.length());
+
+  uint8_t out;
+  std::vector<uint8_t> response_buffer(2);
+
+  // Test 1: Invalid first byte prefix (e.g., starts with 10 instead of 11)
+  // Send 0x80 (10xxxxxx) 0xAA (10xxxxxx)
+  uint8_t invalid_b1_prefix[] = {0x80, 0xAA};
+  send(sv[1], invalid_b1_prefix, 2, 0);
+  run_test("Invalid B1 prefix: readByte returns false", !client.readByte(out));
+  run_test("Invalid B1 prefix: client is disconnected", !client.isConnected());
+  // Verify error response
+  uint8_t err_resp[2];
+  run_test("Invalid B1 prefix: received 2 bytes",
+           read_exact(sv[1], err_resp, 2));
+  // RESP_ERROR_HOST (0x0c), ERR_FRAMING (0x00) -> 0xf0, 0x80
+  run_test("Invalid B1 prefix: received encoded RESP_ERROR_HOST",
+           err_resp[0] == 0xf0);
+  run_test("Invalid B1 prefix: received encoded ERR_FRAMING",
+           err_resp[1] == 0x80);
+
+  // Re-establish client for next test (or create a new one)
+  close(sv[0]);
+  close(sv[1]);
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) {
+    perror("socketpair");
+    exit(1);
+  }
+  ebus::EnhancedClient client2(sv[0], &req);
+  read_exact(sv[1], (uint8_t*)buffer, GREETING_STR.length());
+
+  // Test 2: Invalid second byte prefix (e.g., starts with 00 instead of 10)
+  // Send 0xC6 (11xxxxxx) 0x00 (00xxxxxx)
+  uint8_t invalid_b2_prefix[] = {0xC6, 0x00};
+  send(sv[1], invalid_b2_prefix, 2, 0);
+  run_test("Invalid B2 prefix: readByte returns false", !client2.readByte(out));
+  run_test("Invalid B2 prefix: client is disconnected", !client2.isConnected());
+
+  run_test("Invalid B2 prefix: received 2 bytes",
+           read_exact(sv[1], err_resp, 2));
+  run_test("Invalid B2 prefix: received encoded RESP_ERROR_HOST",
+           err_resp[0] == 0xf0);
+  run_test("Invalid B2 prefix: received encoded ERR_FRAMING",
+           err_resp[1] == 0x80);
+
+  close(sv[0]);
+  close(sv[1]);
+}
+
+int main() {
+  test_readonly_client();
+  test_enhanced_client_protocol();
+  test_enhanced_client_responses();
+  test_enhanced_client_invalid_protocol();
+
+  std::cout << "\nAll Client unit tests passed!" << std::endl;
+
+  return 0;
+}

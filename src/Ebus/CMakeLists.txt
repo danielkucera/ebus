@@ -1,25 +1,58 @@
-set(SOURCES
-    Common.cpp
-    Controller.cpp
-    Datatypes.cpp
-    Handler.cpp
-    Request.cpp
-    Sequence.cpp
-    Telegram.cpp
-    TimingStats.cpp
+# Core Protocol Logic
+set(CORE_SOURCES
+    Core/Sequence.cpp
+    Core/Telegram.cpp
+    Core/Handler.cpp
+    Core/Request.cpp
 )
 
-if(POSIX)
-    list(APPEND SOURCES Posix/BusPosix.cpp)
+# High-level Application Logic
+set(APP_SOURCES
+    App/Controller.cpp
+    App/Client.cpp
+    App/ClientManager.cpp
+    App/DeviceManager.cpp
+    App/DeviceScanner.cpp
+    App/PollManager.cpp
+    App/Scheduler.cpp
+)
+
+# Data Models and Utilities
+set(UTIL_SOURCES
+    Models/Datatypes.cpp
+    Models/Device.cpp
+    Utils/Common.cpp
+    Utils/TimingStats.cpp
+)
+
+# Platform Abstraction Layer
+set(PLATFORM_SOURCES
+    Platform/ServiceThread.cpp
+)
+
+if(POSIX AND NOT APPLE)
+    list(APPEND PLATFORM_SOURCES Platform/Posix/BusPosix.cpp)
+elseif(ESP32)
+    list(APPEND PLATFORM_SOURCES Platform/FreeRTOS/BusFreeRtos.cpp)
 endif()
+
+set(SOURCES 
+    ${CORE_SOURCES} 
+    ${APP_SOURCES} 
+    ${UTIL_SOURCES} 
+    ${PLATFORM_SOURCES}
+)
 
 add_library(ebus ${SOURCES})
 
-target_include_directories(ebus PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(ebus 
+    PUBLIC ${CMAKE_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+)
 
 target_compile_options(ebus PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang>:
-    -Wall;-Wextra;-Wpedantic;-Wshadow;-Wnon-virtual-dtor;-Wformat=2;-fstack-protector-strong>
+    -Wall;-Wextra;-Wpedantic;-Wshadow;-Wnon-virtual-dtor;-Wformat=2;-fstack-protector-strong;-Wno-unused-function>
 )
 
 target_compile_options(ebus PUBLIC $<$<CONFIG:Debug>:-g;-O0>)

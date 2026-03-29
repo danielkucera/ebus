@@ -12,30 +12,37 @@ This library enables communication with systems based on the eBUS protocol. eBUS
 
 ### Class Overview
 
-On the bus, a message is sent or received as a sequence of characters.
+The library is designed with a clear separation between the public API and internal protocol orchestration.
 
-- The purpose of the **Sequence** (low-level) class is to replace or insert special characters and calculate the CRC byte. 
-- The **Telegram** (high-level) class can analyze, generate and evaluate a sequence according to the eBUS specification.
-- The **Handler** has routines for sending and receiving all types of telegrams and the option of collecting
-statistical data about the eBUS system. To perform this task, the Handler requires a serial bus device.
-- **Datatypes** offers functions for decoding/encoding of in accordance with the eBUS data types.
-- **Bus**, **BusIsr**, **Queue** and **ServiceRunner** are selector header files that include platform-specific implementations.
+#### Public API (`include/ebus/`)
+- **Controller**: The primary interface for applications. It manages the lifecycle, scheduling, and diagnostic aggregation. Encapsulated using the PIMPL idiom to hide internal complexity.
+- **Config**: Platform-independent configuration for the controller and hardware-specific bus settings.
+- **Definitions**: Central source of truth for protocol symbols, enums, and callback signatures.
+- **Metrics**: Unified data models for bus health monitoring (jitter, utilization, error rates).
+- **Datatypes**: Advanced encoding/decoding utilities for eBUS-specific data formats.
+
+#### Internal Implementation (`src/Ebus/`)
+- **App**: Orchestration layer containing the **Scheduler** (priority-based transmission), **PollManager** (recurring jobs), and **ClientManager** (network bridging for ebusd).
+- **Core**: The protocol engine. **Handler** manages the Finite State Machine (FSM) for telegrams, while **Request** handles byte-oriented arbitration.
+- **Platform**: Abstraction layer for **Bus** (POSIX/FreeRTOS) and **ServiceThread** (threading).
+
+### Diagnostics & Bus Health
+
+The library includes a unified telemetry system accessible via `Controller::getMetrics()`. It provides:
+- **Bus Utilization**: Physical line low-time calculation.
+- **Error Rate**: Percentage-based protocol health.
+- **Contention Rate**: Collision monitoring during arbitration.
+- **Jitter Analysis**: Timing statistics for SYN symbols and response latencies.
 
 ### Tools
 
-**ebusread** interprets all incoming values ​​as eBUS data. The data is validated and then printed to standard
-output. Reading from files, devices, pipes and TCP sockets is supported. 
+**ebusread**: A diagnostic tool that interprets incoming streams as eBUS telegrams. Supports files, devices, pipes, and TCP sockets.
 
-**playground** can be used by developers for testing and experimenting with the eBUS classes.  
+**playground**: A developer sandbox for testing library features and protocol edge cases.
 
 ### Build
 
 Compilation requires CMake and a C++ compiler (tested on GCC) with C++14 support. 
-
-### [Deprecated]
-
- **EbusStack** offers the possibility to act as a fully-fledged eBUS participant. It has been implemented
-as a PIMPL idiom and runs in its own thread. EbusStack also requires [ppoll](https://man7.org/linux/man-pages/man2/ppoll.2.html) and [pthread](https://man7.org/linux/man-pages/man7/pthreads.7.html) support.
 
 
 For reporting bugs and requesting features, please use the GitHub [Issues](https://github.com/yuhu-/ebus/issues) page.
