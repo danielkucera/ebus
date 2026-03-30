@@ -20,7 +20,7 @@
 #include "TestUtils.hpp"
 #include "Utils/Common.hpp"
 
-SCENARIO("Handler processes eBUS messages correctly", "[handler]") {
+SCENARIO("Handler processes eBUS messages correctly", "[core][handler]") {
   GIVEN("A set of eBUS test cases") {
     // clang-format off
     std::vector<TestCase> test_cases = {
