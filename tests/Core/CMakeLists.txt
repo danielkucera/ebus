@@ -11,6 +11,9 @@ target_link_libraries(catch_request PRIVATE ebus Catch2::Catch2WithMain)
 add_executable(catch_handler catch_handler.cpp)
 target_link_libraries(catch_handler PRIVATE ebus Catch2::Catch2WithMain)
 
+add_executable(catch_bushandler catch_bushandler.cpp)
+target_link_libraries(catch_bushandler PRIVATE ebus Catch2::Catch2WithMain)
+
 # Legacy Tests (Manual main)
 add_executable(test_sequence test_sequence.cpp)
 target_link_libraries(test_sequence PRIVATE ebus)
