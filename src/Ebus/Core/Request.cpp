@@ -124,12 +124,13 @@ std::map<std::string, ebus::MetricValues> ebus::Request::getMetrics() const {
   addCounter("lostTotal", c.firstLost_ + c.secondLost_);
 
   // 2. Calculate Contention Rate (%)
-  // Contention happens when we lose arbitration (lost or retry) on the first attempt.
+  // Contention happens when we lose arbitration (lost or retry) on the first
+  // attempt.
   if (attempts > 0) {
     double contentionRate =
         (static_cast<double>(collisions) / attempts) * 100.0;
-    m["request.contentionRate"] = {contentionRate, contentionRate,
-                                   contentionRate, contentionRate, 0.0, 1};
+    m["request.contentionRate"] = {
+        contentionRate, contentionRate, contentionRate, contentionRate, 0.0, 1};
   } else {
     m["request.contentionRate"] = {0.0, 0.0, 0.0, 0.0, 0.0, 0};
   }
