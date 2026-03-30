@@ -5,10 +5,14 @@
 
 #pragma once
 
+#include <unistd.h>
+
 #include <cstdint>
+#include <ebus/Datatypes.hpp>
 #include <string>
 #include <vector>
-#include <unistd.h>
+
+#include "Core/Handler.hpp"
 
 /**
  * Robust read helper to handle partial TCP/Socket reads.
@@ -33,3 +37,16 @@ inline void encode_enhanced(uint8_t cmd, uint8_t val, uint8_t out[2]) {
 }
 
 const std::string GREETING_STR = "ebus-service 1.0\n";
+
+// Common TestCase struct for eBUS tests
+struct TestCase {
+  ebus::MessageType messageType;
+  uint8_t address;
+  std::string description;
+  std::string read_string;
+  std::string send_string = "";
+  struct ExpectedResult {
+    int telegram;
+    int errors;
+  } expected;
+};

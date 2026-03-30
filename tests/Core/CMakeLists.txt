@@ -1,6 +1,9 @@
 # Catch2 Tests (Modern)
-# add_executable(catch_sequence catch_sequence.cpp)
-# target_link_libraries(catch_sequence PRIVATE ebus Catch2::Catch2WithMain)
+add_executable(catch_sequence catch_sequence.cpp)
+target_link_libraries(catch_sequence PRIVATE ebus Catch2::Catch2WithMain)
+
+add_executable(catch_handler catch_handler.cpp)
+target_link_libraries(catch_handler PRIVATE ebus Catch2::Catch2WithMain)
 
 # Legacy Tests (Manual main)
 add_executable(test_sequence test_sequence.cpp)
