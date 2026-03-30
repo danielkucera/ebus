@@ -2,6 +2,9 @@
 add_executable(catch_sequence catch_sequence.cpp)
 target_link_libraries(catch_sequence PRIVATE ebus Catch2::Catch2WithMain)
 
+add_executable(catch_telegram catch_telegram.cpp)
+target_link_libraries(catch_telegram PRIVATE ebus Catch2::Catch2WithMain)
+
 add_executable(catch_request catch_request.cpp)
 target_link_libraries(catch_request PRIVATE ebus Catch2::Catch2WithMain)
 
