@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "Core/Handler.hpp"
+#include "Platform/Queue.hpp"
 #include "Platform/ServiceThread.hpp"
 
 namespace ebus {
@@ -33,8 +34,7 @@ class Scheduler {
     uint8_t priority = 0;  // larger = higher priority (e.g. 255 is top)
     TimePoint due = Clock::now();
     uint32_t id = 0;
-    int sendAttempts = 0;         // macro retries (with backoff)
-    int arbitrationAttempts = 0;  // micro retries (without backoff)
+    int sendAttempts = 0;
     std::vector<uint8_t> message;
     ResultCallback resultCallback = nullptr;
   };
@@ -54,7 +54,6 @@ class Scheduler {
                  TimePoint when, ResultCallback callback = nullptr);
 
   void setMaxSendAttempts(int sendAttempts);
-  void setMaxArbAttempts(int arbAttempts);
   void setBaseBackoff(Duration duration);
 
   void setTelegramCallback(TelegramCallback callback);
@@ -73,12 +72,22 @@ class Scheduler {
     }
   };
 
-  enum class PendingState { Idle, WaitingForStart, Done };
+  enum class EventType { Won, Lost, Telegram, Error };
+
+  struct Event {
+    EventType type;
+    uint32_t id;
+    MessageType messageType;
+    TelegramType telegramType;
+    std::vector<uint8_t> master;
+    std::vector<uint8_t> slave;
+    std::string error;
+  };
 
   Handler* handler_ = nullptr;
 
   // Queue management
-  std::vector<Item> queue_;
+  std::vector<Item> itemQueue_;
   std::mutex dataMutex_;
   std::condition_variable dataReadyCv_;
 
@@ -90,13 +99,9 @@ class Scheduler {
   // Active transfer state (protected by transferMutex_)
   std::atomic<uint32_t> currentAttemptId_{0};
   std::mutex transferMutex_;
-  std::condition_variable transferFinishedCv_;
-  PendingState pendingState_ = PendingState::Idle;
-  std::atomic<bool> busWon_{false};
-
+  Queue<Event> eventQueue_{16};
   // Configuration
   int maxSendAttempts_;
-  int maxArbAttempts_;
   Duration baseBackoff_;
 
   // Forwarded callbacks

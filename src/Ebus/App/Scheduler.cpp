@@ -23,7 +23,6 @@ ebus::Scheduler::Scheduler(Handler* handler)
       stopFlag_(true),
       nextId_(1),
       maxSendAttempts_(3),
-      maxArbAttempts_(3),
       baseBackoff_(std::chrono::milliseconds(100)) {
   attachHandlerCallbacks();
 }
@@ -45,11 +44,6 @@ void ebus::Scheduler::stop() {
     {
       std::lock_guard<std::mutex> lock(dataMutex_);
       dataReadyCv_.notify_all();
-    }
-
-    {
-      std::lock_guard<std::mutex> lock(transferMutex_);
-      transferFinishedCv_.notify_all();
     }
 
     detachHandlerCallbacks();
@@ -86,10 +80,6 @@ void ebus::Scheduler::setMaxSendAttempts(int sendAttempts) {
   maxSendAttempts_ = std::max(1, sendAttempts);
 }
 
-void ebus::Scheduler::setMaxArbAttempts(int arbAttempts) {
-  maxArbAttempts_ = std::max(1, arbAttempts);
-}
-
 void ebus::Scheduler::setBaseBackoff(Duration duration) {
   baseBackoff_ = duration;
 }
@@ -104,19 +94,19 @@ void ebus::Scheduler::setErrorCallback(ErrorCallback callback) {
 
 size_t ebus::Scheduler::queueSize() {
   std::lock_guard<std::mutex> lock(dataMutex_);
-  return queue_.size();
+  return itemQueue_.size();
 }
 
 void ebus::Scheduler::clear() {
   std::lock_guard<std::mutex> lock(dataMutex_);
-  queue_.clear();
-  std::make_heap(queue_.begin(), queue_.end(), Compare());
+  itemQueue_.clear();
+  std::make_heap(itemQueue_.begin(), itemQueue_.end(), Compare());
 }
 
 void ebus::Scheduler::pushItem(Item&& it) {
   std::lock_guard<std::mutex> lock(dataMutex_);
-  queue_.push_back(std::move(it));
-  std::push_heap(queue_.begin(), queue_.end(), Compare());
+  itemQueue_.push_back(std::move(it));
+  std::push_heap(itemQueue_.begin(), itemQueue_.end(), Compare());
   dataReadyCv_.notify_one();
 }
 
@@ -126,88 +116,81 @@ void ebus::Scheduler::run() {
   // Main loop: wait for next due item, attempt to send, and handle retries if
   // needed
   while (!stopFlag_.load()) {
-    if (queue_.empty()) {
-      dataReadyCv_.wait(lock,
-                        [this] { return stopFlag_.load() || !queue_.empty(); });
+    if (itemQueue_.empty()) {
+      dataReadyCv_.wait(
+          lock, [this] { return stopFlag_.load() || !itemQueue_.empty(); });
       if (stopFlag_.load()) break;
     }
 
     // copy next due while holding lock
-    auto next_due = queue_.front().due;
+    auto next_due = itemQueue_.front().due;
 
     dataReadyCv_.wait_until(lock, next_due, [this, next_due] {
-      return stopFlag_.load() || queue_.empty() ||
-             queue_.front().due <= Clock::now() ||
-             queue_.front().due < next_due;
+      return stopFlag_.load() || itemQueue_.empty() ||
+             itemQueue_.front().due <= Clock::now() ||
+             itemQueue_.front().due < next_due;
     });
 
     if (stopFlag_.load()) break;
-    if (queue_.empty()) continue;
-    if (queue_.front().due > Clock::now()) continue;
+    if (itemQueue_.empty()) continue;
+    if (itemQueue_.front().due > Clock::now()) continue;
 
-    std::pop_heap(queue_.begin(), queue_.end(), Compare());
-    Item currentItem = std::move(queue_.back());
-    queue_.pop_back();
+    std::pop_heap(itemQueue_.begin(), itemQueue_.end(), Compare());
+    Item currentItem = std::move(itemQueue_.back());
+    itemQueue_.pop_back();
 
     lock.unlock();
 
     bool sent = false;
     std::string lastError = "unknown";
+    std::vector<uint8_t> slaveResponse;
+    uint32_t attemptId = currentItem.id;
 
-    // Arbitration loop: attempt to send message, and if it fails due to
-    // arbitration loss or similar, retry up to maxArbAttempts_ times before
-    // giving up and counting as a send attempt failure.
-    for (int arbAttempt = 0; arbAttempt < maxArbAttempts_; ++arbAttempt) {
-      uint32_t attemptId = currentItem.id;  // use item id as token
-      currentAttemptId_.store(attemptId, std::memory_order_relaxed);
+    currentAttemptId_.store(attemptId, std::memory_order_relaxed);
 
-      {
-        std::lock_guard<std::mutex> callbackLock(transferMutex_);
-        pendingState_ = PendingState::WaitingForStart;
-        busWon_.store(false, std::memory_order_relaxed);
-      }
+    // Clear any stale events from previous attempts
+    Event stale;
+    while (eventQueue_.try_pop(stale));
 
-      if (stopFlag_.load()) break;
+    if (stopFlag_.load()) break;
 
-      if (handler_->sendActiveMessage(currentItem.message)) {
-        std::unique_lock<std::mutex> callbackLock(transferMutex_);
+    // Initiation: check if handler is busy, then arm it.
+    if (handler_->isActiveMessagePending()) {
+      lastError = "Handler busy";
+    } else if (!handler_->sendActiveMessage(currentItem.message)) {
+      lastError = "Invalid message";
+    }
 
-        // waiting for FSM (500ms for 2400 Baud)
-        bool signaled = transferFinishedCv_.wait_for(
-            callbackLock, std::chrono::milliseconds(500), [this, attemptId] {
-              // only return true for signals that correspond to current attempt
-              return (currentAttemptId_.load(std::memory_order_relaxed) ==
-                      attemptId) &&
-                     (pendingState_ == PendingState::Done || stopFlag_.load());
-            });
-
-        if (stopFlag_.load()) {
-          pendingState_ = PendingState::Idle;
-          break;
-        }
-
-        if (!signaled) {
+    // If arming succeeded, wait for terminal events
+    if (lastError == "unknown") {
+      auto start = Clock::now();
+      while (!stopFlag_.load()) {
+        Event ev;
+        if (!eventQueue_.pop(ev, 2000)) {
           lastError = "FSM timeout";
-        } else if (currentAttemptId_.load(std::memory_order_relaxed) ==
-                       attemptId &&
-                   busWon_.load(std::memory_order_relaxed)) {
-          // Capture slave response if available for the callback
-          // This assumes the Handler's telegram callback updated Scheduler's
-          // internal tracking or we can query it.
-          sent = true;
+          handler_->reset();  // Serious error: FSM stuck.
           break;
-        } else {
-          lastError = "Bus arbitration lost";
         }
-      } else {
-        lastError = "Handler rejected message";
-        break;
-      }
 
-      pendingState_ = PendingState::Idle;
+        if (ev.id != attemptId) continue;
 
-      if (!sent && arbAttempt + 1 < maxArbAttempts_) {
-        sleep_ms(20);
+        if (ev.type == EventType::Telegram) {
+          sent = true;
+          slaveResponse = std::move(ev.slave);
+          break;
+        } else if (ev.type == EventType::Lost) {
+          lastError = "Arbitration lost";
+          break;
+        } else if (ev.type == EventType::Error) {
+          lastError = ev.error;
+          break;
+        }
+
+        if (Clock::now() - start > std::chrono::seconds(4)) {
+          lastError = "Total transfer timeout";
+          handler_->reset();
+          break;
+        }
       }
     }
 
@@ -215,21 +198,17 @@ void ebus::Scheduler::run() {
     currentAttemptId_.store(0, std::memory_order_relaxed);
 
     if (sent) {
-      if (currentItem.resultCallback) {
-        // We don't have the slave bytes easily here without more plumbing,
-        // but we can pass an indicator of success.
-        currentItem.resultCallback(true, currentItem.message, {});
-      }
+      if (currentItem.resultCallback)
+        currentItem.resultCallback(true, currentItem.message, slaveResponse);
       lock.lock();
     } else {
       ++currentItem.sendAttempts;
       if (currentItem.sendAttempts < maxSendAttempts_) {
         currentItem.due =
             Clock::now() + backoffDuration(currentItem.sendAttempts);
-
         lock.lock();
-        queue_.push_back(std::move(currentItem));
-        std::push_heap(queue_.begin(), queue_.end(), Compare());
+        itemQueue_.push_back(std::move(currentItem));
+        std::push_heap(itemQueue_.begin(), itemQueue_.end(), Compare());
         dataReadyCv_.notify_one();
       } else {
         if (externErrorCallback_) {
@@ -240,11 +219,6 @@ void ebus::Scheduler::run() {
         }
         lock.lock();
       }
-    }
-
-    {
-      std::lock_guard<std::mutex> callbackLock(transferMutex_);
-      pendingState_ = PendingState::Idle;
     }
   }
 }
@@ -274,24 +248,20 @@ void ebus::Scheduler::attachHandlerCallbacks() {
     uint32_t id = currentAttemptId_.load(std::memory_order_relaxed);
     if (id == 0) return;
 
-    std::lock_guard<std::mutex> lock(transferMutex_);
-    busWon_.store(true, std::memory_order_relaxed);
-    // wake waiter to re-evaluate predicate (telegram may have arrived earlier)
-    if (pendingState_ == PendingState::WaitingForStart) {
-      transferFinishedCv_.notify_one();
-    }
+    Event ev;
+    ev.type = EventType::Won;
+    ev.id = id;
+    eventQueue_.try_push(ev);
   });
 
   handler_->setBusRequestLostCallback([this]() {
     uint32_t id = currentAttemptId_.load(std::memory_order_relaxed);
     if (id == 0) return;
 
-    std::lock_guard<std::mutex> lock(transferMutex_);
-    if (pendingState_ == PendingState::WaitingForStart) {
-      pendingState_ = PendingState::Done;
-      transferFinishedCv_.notify_one();
-    }
-    busWon_.store(false, std::memory_order_relaxed);
+    Event ev;
+    ev.type = EventType::Lost;
+    ev.id = id;
+    eventQueue_.try_push(ev);
   });
 
   handler_->setTelegramCallback([this](const MessageType& messageType,
@@ -304,12 +274,14 @@ void ebus::Scheduler::attachHandlerCallbacks() {
     uint32_t id = currentAttemptId_.load(std::memory_order_relaxed);
     if (id == 0) return;
 
-    std::lock_guard<std::mutex> lock(transferMutex_);
-    if (pendingState_ == PendingState::WaitingForStart) {
-      // mark done when telegram arrives; capture busWon_ state for later check
-      pendingState_ = PendingState::Done;
-      transferFinishedCv_.notify_one();
-    }
+    Event ev;
+    ev.type = EventType::Telegram;
+    ev.id = id;
+    ev.messageType = messageType;
+    ev.telegramType = telegramType;
+    ev.master = master;
+    ev.slave = slave;
+    eventQueue_.try_push(ev);
   });
 
   handler_->setErrorCallback([this](const std::string& error,
@@ -317,21 +289,19 @@ void ebus::Scheduler::attachHandlerCallbacks() {
                                     const std::vector<uint8_t>& slave) {
     if (externErrorCallback_) externErrorCallback_(error, master, slave);
 
-    auto state = handler_->getState();
+    // auto state = handler_->getState();
 
     // Reset on certain error conditions that indicate the bus is now free again
-    if (state == ebus::HandlerState::releaseBus ||
-        state == ebus::HandlerState::passiveReceiveMaster) {
-      uint32_t id = currentAttemptId_.load(std::memory_order_relaxed);
-      if (id == 0) return;
+    uint32_t id = currentAttemptId_.load(std::memory_order_relaxed);
+    if (id == 0) return;
 
-      std::lock_guard<std::mutex> lock(transferMutex_);
-      if (pendingState_ == PendingState::WaitingForStart) {
-        busWon_.store(false, std::memory_order_relaxed);
-        pendingState_ = PendingState::Done;
-        transferFinishedCv_.notify_one();
-      }
-    }
+    Event ev;
+    ev.type = EventType::Error;
+    ev.id = id;
+    ev.error = error;
+    ev.master = master;
+    ev.slave = slave;
+    eventQueue_.try_push(ev);
   });
 }
 
