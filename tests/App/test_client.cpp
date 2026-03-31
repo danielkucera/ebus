@@ -7,13 +7,13 @@
 #include <unistd.h>
 
 #include <cassert>
+#include <ebus/Definitions.hpp>
 #include <iostream>
 #include <vector>
 
 #include "App/Client.hpp"
 #include "Core/Request.hpp"
 #include "TestUtils.hpp"
-#include "ebus/Definitions.hpp"
 
 void run_test(const std::string& name, bool condition) {
   std::cout << "[TEST] " << name << ": " << (condition ? "PASSED" : "FAILED")
@@ -80,7 +80,8 @@ void test_enhanced_client_responses() {
   }
 
   ebus::Request req;
-  req.setMaxLockCounter(0); // Disable arbitration lock for deterministic testing
+  req.setMaxLockCounter(
+      0);  // Disable arbitration lock for deterministic testing
   ebus::EnhancedClient client(sv[0], &req);
 
   // Consume greeting: Read EXACTLY the length to avoid race with handleBusData

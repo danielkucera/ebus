@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <ebus/Definitions.hpp>
 #include <iostream>
 #include <vector>
 
@@ -15,7 +16,6 @@
 #include "Core/Request.hpp"
 #include "Platform/Bus.hpp"
 #include "TestUtils.hpp"
-#include "ebus/Definitions.hpp"
 
 void run_test(const std::string& name, bool condition) {
   std::cout << "[TEST] " << name << ": " << (condition ? "PASSED" : "FAILED")
@@ -291,11 +291,13 @@ void test_enhanced_active_sending() {
 }
 
 void test_enhanced_arbitration_lost() {
-  std::cout << "--- Test: ClientManager Enhanced Arbitration Lost ---" << std::endl;
+  std::cout << "--- Test: ClientManager Enhanced Arbitration Lost ---"
+            << std::endl;
 
   ebus::Request req;
   req.setMaxLockCounter(0);
-  ebus::busConfig busCfg{.device = "/dev/null", .simulate = true, .enable_syn = false};
+  ebus::busConfig busCfg{
+      .device = "/dev/null", .simulate = true, .enable_syn = false};
   ebus::Bus bus(busCfg, &req);
   ebus::Handler handler(0xff, &bus, &req);
   ebus::BusHandler busHandler(&req, &handler, bus.getQueue());
@@ -319,27 +321,29 @@ void test_enhanced_arbitration_lost() {
   send(svEnh[1], cmdStart, 2, 0);
 
   int timeout = 100;
-  while(timeout-- > 0 && !req.busRequestPending()) { usleep(1000); }
+  while (timeout-- > 0 && !req.busRequestPending()) {
+    usleep(1000);
+  }
 
   // 2. Force arbitration lost to master 0x09
   uint8_t winner = 0x09;
   req.forceResultForTest(ebus::RequestResult::firstLost);
   req.busRequestCompleted();
-  bus.writeByte(winner); 
+  bus.writeByte(winner);
   usleep(20000);
 
   // 3. Verify RESP_FAILED (0x0a) + winner (0x09) -> 0xe8 0x89
   uint8_t resp[2];
-  run_test("Enhanced received RESP_FAILED", 
+  run_test("Enhanced received RESP_FAILED",
            read_exact(svEnh[1], resp, 2) && resp[0] == 0xe8 && resp[1] == 0x89);
 
   // 4. Verify client is NOT disconnected but no longer active sender
   bus.writeByte(ebus::sym_syn);
   usleep(20000);
-  
-  // Enhanced observer receives SYN (Short form 0xaa is not possible, 
+
+  // Enhanced observer receives SYN (Short form 0xaa is not possible,
   // so encoded RESP_RECEIVED 0x01 + 0xaa -> 0xc6 0xaa)
-  run_test("Enhanced client stayed connected and received SYN", 
+  run_test("Enhanced client stayed connected and received SYN",
            read_exact(svEnh[1], resp, 2) && resp[0] == 0xc6 && resp[1] == 0xaa);
 
   manager.stop();
@@ -371,12 +375,15 @@ void test_client_timeout() {
 
   // Wait for it to become active
   int timeout = 100;
-  while(timeout-- > 0 && !req.busRequestPending()) { usleep(1000); }
+  while (timeout-- > 0 && !req.busRequestPending()) {
+    usleep(1000);
+  }
   run_test("Client is now active", req.busRequestPending());
 
-  // 2. Now stop sending bytes from the client side and wait for watchdog (> 1000ms)
+  // 2. Now stop sending bytes from the client side and wait for watchdog (>
+  // 1000ms)
   std::cout << "  Waiting for watchdog (1.1s)..." << std::endl;
-  usleep(1100000); 
+  usleep(1100000);
 
   // 3. Verify the bus request was cleared by the manager
   run_test("Watchdog cleared active client", !req.busRequestPending());

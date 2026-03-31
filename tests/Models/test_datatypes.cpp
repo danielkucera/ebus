@@ -7,11 +7,10 @@
 #include <cassert>
 #include <cctype>
 #include <cmath>
+#include <ebus/Datatypes.hpp>
 #include <iostream>
 #include <limits>
 #include <vector>
-
-#include "ebus/Datatypes.hpp"
 
 using namespace ebus;
 

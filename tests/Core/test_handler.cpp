@@ -5,6 +5,8 @@
 
 #include <cassert>
 #include <cstddef>
+#include <ebus/Datatypes.hpp>
+#include <ebus/Metrics.hpp>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -16,8 +18,6 @@
 #include "Platform/Bus.hpp"
 #include "TestUtils.hpp"
 #include "Utils/Common.hpp"
-#include "ebus/Datatypes.hpp"
-#include "ebus/Metrics.hpp"
 
 std::atomic<int> g_error_count(0);
 std::atomic<int> g_telegram_count(0);

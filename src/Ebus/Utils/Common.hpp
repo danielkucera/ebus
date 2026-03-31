@@ -9,10 +9,9 @@
 #pragma once
 
 #include <cstdint>
+#include <ebus/Definitions.hpp>
 #include <string>
 #include <vector>
-
-#include "ebus/Definitions.hpp"
 
 namespace ebus {
 

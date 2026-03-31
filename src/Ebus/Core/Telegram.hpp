@@ -31,12 +31,12 @@
 #pragma once
 
 #include <cstddef>
+#include <ebus/Definitions.hpp>
 #include <string>
 #include <vector>
 
 #include "Core/Sequence.hpp"
 #include "Utils/Common.hpp"
-#include "ebus/Definitions.hpp"
 
 namespace ebus {
 

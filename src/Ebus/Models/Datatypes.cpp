@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#include "ebus/Datatypes.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <ebus/Datatypes.hpp>
 #include <limits>
 #include <map>
 #include <sstream>

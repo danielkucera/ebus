@@ -7,6 +7,7 @@
 
 #if defined(ESP32)
 #include <cstdint>
+#include <ebus/Config.hpp>
 #include <functional>
 #include <map>
 
@@ -14,7 +15,6 @@
 #include "Platform/Queue.hpp"
 #include "Utils/TimingStats.hpp"
 #include "driver/uart.h"
-#include "ebus/Config.hpp"
 #include "esp_idf_version.h"
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)

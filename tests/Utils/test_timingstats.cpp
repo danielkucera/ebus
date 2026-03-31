@@ -4,11 +4,10 @@
  */
 
 #include <cmath>
+#include <ebus/Metrics.hpp>
 #include <iomanip>
 #include <iostream>
 #include <vector>
-
-#include <ebus/Metrics.hpp>
 
 /**
  * Legacy-style test helper for TimingStats.

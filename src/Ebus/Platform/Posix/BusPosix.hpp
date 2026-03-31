@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <ebus/Config.hpp>
 #include <functional>
 #include <map>
 #include <memory>
@@ -30,7 +31,6 @@
 #include "Core/Request.hpp"
 #include "Platform/Queue.hpp"
 #include "Utils/TimingStats.hpp"
-#include "ebus/Config.hpp"
 
 namespace ebus {
 

@@ -10,6 +10,7 @@
 #pragma once
 
 #include <array>
+#include <ebus/Definitions.hpp>
 #include <functional>
 #include <map>
 #include <string>
@@ -20,7 +21,6 @@
 #include "Platform/Bus.hpp"
 #include "Platform/Queue.hpp"
 #include "Utils/TimingStats.hpp"
-#include "ebus/Definitions.hpp"
 
 namespace ebus {
 

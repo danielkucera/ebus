@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <ebus/Datatypes.hpp>
 #include <future>
 #include <iomanip>
 #include <iostream>
@@ -20,7 +21,6 @@
 #include "Core/Request.hpp"
 #include "Platform/Bus.hpp"
 #include "Utils/Common.hpp"
-#include "ebus/Datatypes.hpp"
 
 struct TestCase {
   std::string description;
