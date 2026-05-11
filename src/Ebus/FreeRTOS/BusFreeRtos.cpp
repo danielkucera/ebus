@@ -354,7 +354,7 @@ void IRAM_ATTR ebus::BusFreeRtos::s_onFallingEdge(void* arg) {
   if (inst) inst->onFallingEdge();
 }
 
-void ebus::BusFreeRtos::onFallingEdge() {
+void IRAM_ATTR ebus::BusFreeRtos::onFallingEdge() {
   int64_t now = esp_timer_get_time();
   portENTER_CRITICAL_ISR(&timerMux_);
   bufferIndex_ = (bufferIndex_ + 1) % FALLING_EDGE_BUFFER_SIZE;
@@ -377,7 +377,7 @@ bool IRAM_ATTR ebus::BusFreeRtos::s_onBusIsrTimer(void* arg) {
 }
 #endif
 
-bool ebus::BusFreeRtos::onBusIsrTimer() {
+bool IRAM_ATTR ebus::BusFreeRtos::onBusIsrTimer() {
   uint8_t byte = request_->busRequestAddress();
   uart_ll_write_txfifo(UART_LL_GET_HW(uartPortNum_), &byte, 1);
   portENTER_CRITICAL_ISR(&timerMux_);

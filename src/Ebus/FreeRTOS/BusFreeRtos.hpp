@@ -166,7 +166,7 @@ class BusFreeRtos {
 
   // ISR: Save the falling edges in order to estimate the sync byte
   static void IRAM_ATTR s_onFallingEdge(void* arg);
-  void onFallingEdge();
+  void IRAM_ATTR onFallingEdge();
 
   // ISR: Write request byte at the exact time
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
@@ -176,7 +176,7 @@ class BusFreeRtos {
 #else
   static bool IRAM_ATTR s_onBusIsrTimer(void* arg);
 #endif
-  bool onBusIsrTimer();
+  bool IRAM_ATTR onBusIsrTimer();
 };
 
 }  // namespace ebus
